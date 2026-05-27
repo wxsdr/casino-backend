@@ -29,31 +29,33 @@ client.on('ready', () => {
 
 client.on('messageCreate', async (message) => {
     if (message.content.includes('[CASINO_ORDER]')) {
-        console.log(`[БОТ НАШЕЛ] Сообщение: ${message.content}`);
-        
-        // Берем текст после тега
         const rawContent = message.content.split('[CASINO_ORDER]')[1];
         if (!rawContent) return;
 
-        // Разделяем на части
         const [user, amountRaw] = rawContent.split(':');
-        
-        // Очищаем количество: оставляем только цифры
         const amount = parseInt(amountRaw.replace(/\D/g, ''));
-        
-        if (user && amount) {
-            try {
-                const userRef = db.ref(`users_by_name/${user.trim().toLowerCase()}`);
-                const snapshot = await userRef.once('value');
-                const data = snapshot.val();
-                const currentChips = data ? (data.chips || 0) : 0;
+        const username = user.trim();
 
-                await userRef.update({ 
-                    username: user.trim(), 
-                    chips: currentChips + amount 
-                });
+        if (username && amount) {
+            try {
+                const userRef = db.ref(`users_by_name/${username.toLowerCase()}`);
+                const snapshot = await userRef.once('value');
                 
-                console.log(`[УСПЕХ] Начислил ${amount} фишек игроку ${user.trim()}`);
+                if (!snapshot.exists()) {
+                    // Якщо користувача немає — створюємо новий запис
+                    await userRef.set({
+                        username: username,
+                        chips: amount
+                    });
+                    console.log(`[НОВИЙ ЮЗЕР] Створено ${username}, налічено ${amount} фішок`);
+                } else {
+                    // Якщо є — оновлюємо
+                    const data = snapshot.val();
+                    await userRef.update({ 
+                        chips: (data.chips || 0) + amount 
+                    });
+                    console.log(`[УСПЕХ] Начислил ${amount} фишек игроку ${username}`);
+                }
             } catch (error) {
                 console.error(`[ОШИБКА] Firebase:`, error);
             }
