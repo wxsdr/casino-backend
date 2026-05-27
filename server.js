@@ -28,50 +28,46 @@ client.on('ready', () => {
 });
 
 client.on('messageCreate', async (message) => {
-    // --- ПОПОВНЕННЯ ФІШОК (ПОКУПКА) ---
-    if (message.content.includes('[CASINO_ORDER]')) {
-        const rawContent = message.content.split('[CASINO_ORDER]')[1];
-        if (!rawContent) return;
-        const [user, amountRaw] = rawContent.split(':');
-        const amount = parseInt(amountRaw.replace(/\D/g, ''));
-        const username = user.trim();
+    // Игнорируем логи сервера (чтобы не дублировать начисления и не ловить баги со временем)
+    if (message.content.includes("INFO") || message.content.includes("issued server command") || message.content.includes("```")) return;
 
-        if (username && amount) {
-            try {
-                const userRef = db.ref(`users_by_name/${username.toLowerCase()}`);
-                const snapshot = await userRef.once('value');
-                if (!snapshot.exists()) {
-                    await userRef.set({ username: username, chips: amount });
-                } else {
-                    const data = snapshot.val();
-                    await userRef.update({ chips: (data.chips || 0) + amount });
-                }
-                console.log(`[ПОПОВНЕННЯ] Зарахував ${amount} фішок гравцю ${username}`);
-            } catch (e) { console.error(e); }
-        }
+    // --- ПОПОВНЕННЯ ФІШОК (ПОКУПКА) ---
+    // Regex строго ищет: [CASINO_ORDER] ник:число (и никаких других символов)
+    const orderMatch = message.content.match(/\[CASINO_ORDER\]\s*([a-zA-Z0-9_\-\.]+):(\d+)/);
+    if (orderMatch) {
+        const username = orderMatch[1];
+        const amount = parseInt(orderMatch[2], 10);
+
+        try {
+            const userRef = db.ref(`users_by_name/${username.toLowerCase()}`);
+            const snapshot = await userRef.once('value');
+            if (!snapshot.exists()) {
+                await userRef.set({ username: username, chips: amount });
+            } else {
+                const data = snapshot.val();
+                await userRef.update({ chips: parseInt(data.chips || 0, 10) + amount });
+            }
+            console.log(`[ПОПОВНЕННЯ] Зарахував ${amount} фішок гравцю ${username}`);
+        } catch (e) { console.error(e); }
     }
 
     // --- ЗНЯТТЯ ФІШОК (ВИВЕДЕННЯ) ---
-    if (message.content.includes('[CASINO_WITHDRAW]')) {
-        const rawContent = message.content.split('[CASINO_WITHDRAW]')[1];
-        if (!rawContent) return;
-        const [user, amountRaw] = rawContent.split(':');
-        const amount = parseInt(amountRaw.replace(/\D/g, ''));
-        const username = user.trim();
+    const withdrawMatch = message.content.match(/\[CASINO_WITHDRAW\]\s*([a-zA-Z0-9_\-\.]+):(\d+)/);
+    if (withdrawMatch) {
+        const username = withdrawMatch[1];
+        const amount = parseInt(withdrawMatch[2], 10);
 
-        if (username && amount) {
-            try {
-                const userRef = db.ref(`users_by_name/${username.toLowerCase()}`);
-                const snapshot = await userRef.once('value');
-                if (snapshot.exists()) {
-                    const data = snapshot.val();
-                    let newChips = (data.chips || 0) - amount;
-                    if (newChips < 0) newChips = 0; // Захист від мінусового балансу
-                    await userRef.update({ chips: newChips });
-                    console.log(`[ЗНЯТТЯ] Списав ${amount} фішок з сайту у гравця ${username}`);
-                }
-            } catch (e) { console.error(e); }
-        }
+        try {
+            const userRef = db.ref(`users_by_name/${username.toLowerCase()}`);
+            const snapshot = await userRef.once('value');
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                let newChips = parseInt(data.chips || 0, 10) - amount;
+                if (newChips < 0) newChips = 0; // Защита от минуса
+                await userRef.update({ chips: newChips });
+                console.log(`[ЗНЯТТЯ] Списав ${amount} фішок з сайту у гравця ${username}`);
+            }
+        } catch (e) { console.error(e); }
     }
 });
 
