@@ -28,28 +28,34 @@ client.on('ready', () => {
 });
 
 client.on('messageCreate', async (message) => {
-    // Временно убираем привязку к каналу, чтобы проверить, увидит ли он сообщение везде
     if (message.content.includes('[CASINO_ORDER]')) {
-        console.log(`[БОТ НАШЕЛ] Сообщение в канале ${message.channel.name}: ${message.content}`);
+        console.log(`[БОТ НАШЕЛ] Сообщение: ${message.content}`);
         
-        const cleanContent = message.content.substring(message.content.indexOf('[CASINO_ORDER]')).replace('[CASINO_ORDER] ', '').trim();
-        const [user, amount] = cleanContent.split(':');
+        // Берем текст после тега
+        const rawContent = message.content.split('[CASINO_ORDER]')[1];
+        if (!rawContent) return;
+
+        // Разделяем на части
+        const [user, amountRaw] = rawContent.split(':');
+        
+        // Очищаем количество: оставляем только цифры
+        const amount = parseInt(amountRaw.replace(/\D/g, ''));
         
         if (user && amount) {
             try {
-                const userRef = db.ref(`users_by_name/${user.toLowerCase()}`);
+                const userRef = db.ref(`users_by_name/${user.trim().toLowerCase()}`);
                 const snapshot = await userRef.once('value');
                 const data = snapshot.val();
                 const currentChips = data ? (data.chips || 0) : 0;
 
                 await userRef.update({ 
-                    username: user, 
-                    chips: currentChips + parseInt(amount) 
+                    username: user.trim(), 
+                    chips: currentChips + amount 
                 });
                 
-                console.log(`[УСПЕХ] Начислил ${amount} фишек игроку ${user}`);
+                console.log(`[УСПЕХ] Начислил ${amount} фишек игроку ${user.trim()}`);
             } catch (error) {
-                console.error(`[ОШИБКА] Не удалось обновить Firebase:`, error);
+                console.error(`[ОШИБКА] Firebase:`, error);
             }
         }
     }
