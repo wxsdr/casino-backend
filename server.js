@@ -3,8 +3,9 @@ const admin = require('firebase-admin');
 const { Client, GatewayIntentBits } = require('discord.js');
 
 const app = express();
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
+// --- НАСТРОЙКА FIREBASE ---
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
     databaseURL: "https://kurahivka-casino-default-rtdb.europe-west1.firebasedatabase.app"
@@ -12,29 +13,74 @@ admin.initializeApp({
 
 const db = admin.database();
 
-// Инициализация бота
+// --- НАСТРОЙКА DISCORD БОТА ---
 const client = new Client({ 
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] 
+    intents: [
+        GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessages, 
+        GatewayIntentBits.MessageContent
+    ] 
+});
+
+// Проверка успешного запуска бота
+client.on('ready', () => {
+    console.log(`[БОТ] Успешно залогинился как ${client.user.tag}`);
 });
 
 client.on('messageCreate', async (message) => {
-    // Проверяем название канала и префикс
-    if (message.channel.name === 'casino' && message.content.startsWith('[CASINO_ORDER]')) {
-        const content = message.content.replace('[CASINO_ORDER] ', '');
-        const [user, amount] = content.split(':');
+    // ВЫВОДИМ В ЛОГИ АБСОЛЮТНО ВСЕ СООБЩЕНИЯ, КОТОРЫЕ ВИДИТ БОТ
+    console.log(`[БОТ ВИДИТ] Канал: "${message.channel.name}", Текст: "${message.content}"`);
+
+    // Ищем наш тег в сообщении (используем includes, чтобы точно не пропустить)
+    if (message.content.includes('[CASINO_ORDER]')) {
+        // Очищаем строку, оставляя только ник:число
+        const cleanContent = message.content.substring(message.content.indexOf('[CASINO_ORDER]')).replace('[CASINO_ORDER] ', '').trim();
+        const [user, amount] = cleanContent.split(':');
         
         if (user && amount) {
-            const userRef = db.ref(`users_by_name/${user.toLowerCase()}`);
-            const snapshot = await userRef.once('value');
-            const data = snapshot.val();
-            const currentChips = data ? (data.chips || 0) : 0;
+            try {
+                const userRef = db.ref(`users_by_name/${user.toLowerCase()}`);
+                const snapshot = await userRef.once('value');
+                const data = snapshot.val();
+                const currentChips = data ? (data.chips || 0) : 0;
 
-            await userRef.update({ username: user, chips: currentChips + parseInt(amount) });
-            console.log(`[БОТ] Начислил ${amount} фишек игроку ${user}`);
+                await userRef.update({ 
+                    username: user, 
+                    chips: currentChips + parseInt(amount) 
+                });
+                
+                console.log(`[УСПЕХ] Начислил ${amount} фишек игроку ${user}`);
+            } catch (error) {
+                console.error(`[ОШИБКА] Не удалось обновить Firebase:`, error);
+            }
         }
     }
 });
 
 client.login(process.env.DISCORD_TOKEN);
 
-app.listen(process.env.PORT || 3000, () => console.log("Бэкенд запущен!"));
+
+// --- НАСТРОЙКА HTTP API (ДЛЯ МАЙНКРАФТА) ---
+app.get('/api/withdraw', async (req, res) => {
+    const { user } = req.query;
+    if (!user) return res.send("0");
+    
+    const userRef = db.ref(`users_by_name/${user.toLowerCase()}`);
+
+    try {
+        const snapshot = await userRef.once('value');
+        const data = snapshot.val();
+        const chips = data ? (data.chips || 0) : 0;
+
+        if (chips > 0) {
+            await userRef.update({ chips: 0 }); 
+        }
+        res.send(chips.toString());
+    } catch (e) {
+        console.error("[ОШИБКА] API withdraw:", e);
+        res.send("0");
+    }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`[СЕРВЕР] Бэкенд запущен на порту ${PORT}`));
