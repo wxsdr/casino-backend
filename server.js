@@ -66,7 +66,9 @@ client.on('messageCreate', async (message) => {
 client.login(process.env.DISCORD_TOKEN);
 
 
-// --- НАСТРОЙКА HTTP API (ДЛЯ МАЙНКРАФТА) ---
+// ... твій код бота вище ...
+
+// ВСТАВЛЯЙ СЮДИ:
 app.get('/api/withdraw', async (req, res) => {
     const { user } = req.query;
     if (!user) return res.send("0");
@@ -75,18 +77,24 @@ app.get('/api/withdraw', async (req, res) => {
 
     try {
         const snapshot = await userRef.once('value');
-        const data = snapshot.val();
-        const chips = data ? (data.chips || 0) : 0;
-
-        if (chips > 0) {
-            await userRef.update({ chips: 0 }); 
+        if (!snapshot.exists()) {
+            // Створюємо юзера, якщо він вперше зайшов
+            await userRef.set({ username: user, chips: 0 });
+            res.send("0");
+        } else {
+            const data = snapshot.val();
+            const chips = data.chips || 0;
+            if (chips > 0) {
+                await userRef.update({ chips: 0 }); 
+            }
+            res.send(chips.toString());
         }
-        res.send(chips.toString());
     } catch (e) {
         console.error("[ОШИБКА] API withdraw:", e);
         res.send("0");
     }
 });
 
+// ... і далі йде запуск сервера ...
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`[СЕРВЕР] Бэкенд запущен на порту ${PORT}`));
