@@ -81,6 +81,26 @@ client.on('messageCreate', async (message) => {
             console.log(`[БЕЗОПАСНОСТЬ] Установил PIN для ${username}`);
         } catch (e) { console.error(e); }
     }
+
+    // --- ВХІД В КАЗИНО (РОЗБЛОКУВАТИ САЙТ) ---
+    const enterMatch = message.content.match(/\[CASINO_ENTER\]\s*([a-zA-Z0-9_\-\.]+)/);
+    if (enterMatch) {
+        const username = enterMatch[1].trim();
+        try {
+            await db.ref(`users_by_name/${username.toLowerCase()}`).update({ in_casino: true });
+            console.log(`[ЛОКАЦІЯ] Гравець ${username} увійшов в казино (Сайт розблоковано)`);
+        } catch (e) { console.error(e); }
+    }
+
+    // --- ВИХІД З КАЗИНО АБО З ГРИ (ЗАБЛОКУВАТИ САЙТ) ---
+    const exitMatch = message.content.match(/\[CASINO_EXIT\]\s*([a-zA-Z0-9_\-\.]+)/);
+    if (exitMatch) {
+        const username = exitMatch[1].trim();
+        try {
+            await db.ref(`users_by_name/${username.toLowerCase()}`).update({ in_casino: false });
+            console.log(`[ЛОКАЦІЯ] Гравець ${username} покинув казино (Сайт заблоковано)`);
+        } catch (e) { console.error(e); }
+    }
 });
 
 client.login(process.env.DISCORD_TOKEN);
