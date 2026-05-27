@@ -28,12 +28,10 @@ client.on('ready', () => {
 });
 
 client.on('messageCreate', async (message) => {
-    // ВЫВОДИМ В ЛОГИ АБСОЛЮТНО ВСЕ СООБЩЕНИЯ, КОТОРЫЕ ВИДИТ БОТ
-    console.log(`[БОТ ВИДИТ] Канал: "${message.channel.name}", Текст: "${message.content}"`);
-
-    // Ищем наш тег в сообщении (используем includes, чтобы точно не пропустить)
+    // Временно убираем привязку к каналу, чтобы проверить, увидит ли он сообщение везде
     if (message.content.includes('[CASINO_ORDER]')) {
-        // Очищаем строку, оставляя только ник:число
+        console.log(`[БОТ НАШЕЛ] Сообщение в канале ${message.channel.name}: ${message.content}`);
+        
         const cleanContent = message.content.substring(message.content.indexOf('[CASINO_ORDER]')).replace('[CASINO_ORDER] ', '').trim();
         const [user, amount] = cleanContent.split(':');
         
