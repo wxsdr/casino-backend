@@ -28,10 +28,10 @@ client.on('ready', () => {
 });
 
 client.on('messageCreate', async (message) => {
+    // --- ПОПОВНЕННЯ ФІШОК (ПОКУПКА) ---
     if (message.content.includes('[CASINO_ORDER]')) {
         const rawContent = message.content.split('[CASINO_ORDER]')[1];
         if (!rawContent) return;
-
         const [user, amountRaw] = rawContent.split(':');
         const amount = parseInt(amountRaw.replace(/\D/g, ''));
         const username = user.trim();
@@ -40,25 +40,37 @@ client.on('messageCreate', async (message) => {
             try {
                 const userRef = db.ref(`users_by_name/${username.toLowerCase()}`);
                 const snapshot = await userRef.once('value');
-                
                 if (!snapshot.exists()) {
-                    // Якщо користувача немає — створюємо новий запис
-                    await userRef.set({
-                        username: username,
-                        chips: amount
-                    });
-                    console.log(`[НОВИЙ ЮЗЕР] Створено ${username}, налічено ${amount} фішок`);
+                    await userRef.set({ username: username, chips: amount });
                 } else {
-                    // Якщо є — оновлюємо
                     const data = snapshot.val();
-                    await userRef.update({ 
-                        chips: (data.chips || 0) + amount 
-                    });
-                    console.log(`[УСПЕХ] Начислил ${amount} фишек игроку ${username}`);
+                    await userRef.update({ chips: (data.chips || 0) + amount });
                 }
-            } catch (error) {
-                console.error(`[ОШИБКА] Firebase:`, error);
-            }
+                console.log(`[ПОПОВНЕННЯ] Зарахував ${amount} фішок гравцю ${username}`);
+            } catch (e) { console.error(e); }
+        }
+    }
+
+    // --- ЗНЯТТЯ ФІШОК (ВИВЕДЕННЯ) ---
+    if (message.content.includes('[CASINO_WITHDRAW]')) {
+        const rawContent = message.content.split('[CASINO_WITHDRAW]')[1];
+        if (!rawContent) return;
+        const [user, amountRaw] = rawContent.split(':');
+        const amount = parseInt(amountRaw.replace(/\D/g, ''));
+        const username = user.trim();
+
+        if (username && amount) {
+            try {
+                const userRef = db.ref(`users_by_name/${username.toLowerCase()}`);
+                const snapshot = await userRef.once('value');
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    let newChips = (data.chips || 0) - amount;
+                    if (newChips < 0) newChips = 0; // Захист від мінусового балансу
+                    await userRef.update({ chips: newChips });
+                    console.log(`[ЗНЯТТЯ] Списав ${amount} фішок з сайту у гравця ${username}`);
+                }
+            } catch (e) { console.error(e); }
         }
     }
 });
