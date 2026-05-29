@@ -1,6 +1,7 @@
 const express = require('express');
 const admin = require('firebase-admin');
 const { Client, GatewayIntentBits } = require('discord.js');
+const https = require('https'); // Добавили модуль для авто-пинга
 
 const app = express();
 
@@ -28,7 +29,7 @@ client.on('ready', () => {
 });
 
 client.on('messageCreate', async (message) => {
-    // Игнорируем логи сервера (чтобы не дублировать начисления и не ловить баги со временем)
+    // Игнорируем логи сервера
     if (message.content.includes("INFO") || message.content.includes("issued server command") || message.content.includes("```")) return;
 
     // --- ПОПОВНЕННЯ ФІШОК (ПОКУПКА) ---
@@ -106,9 +107,16 @@ client.on('messageCreate', async (message) => {
 client.login(process.env.DISCORD_TOKEN);
 
 
-// --- API ДЛЯ АВТОРИЗАЦИИ НА САЙТЕ ---
+// =======================================================
+// --- ГОЛОВНА СТОРІНКА (ЩОБ UPTIMEROBOT НЕ ВИДАВАВ 404) ---
+// =======================================================
+app.get('/', (req, res) => {
+    res.status(200).send('Казино Бэкенд работает идеально! 🎰');
+});
+
+
+// --- API ДЛЯ АВТОРИЗАЦИИ НА САЙТЕ (Запасной вариант, если вдруг пригодится) ---
 app.get('/api/login', async (req, res) => {
-    // Включаем CORS, чтобы сайт мог делать запросы с любого домена
     res.setHeader('Access-Control-Allow-Origin', '*'); 
     
     const { user, pin } = req.query;
@@ -120,9 +128,7 @@ app.get('/api/login', async (req, res) => {
         
         if (snapshot.exists()) {
             const data = snapshot.val();
-            // Проверяем, совпадает ли код
             if (data.pin && data.pin === pin) {
-                // Если совпал, пускаем и затираем пин (чтобы он был одноразовым)
                 await userRef.update({ pin: null }); 
                 res.json({ success: true });
             } else {
@@ -146,7 +152,6 @@ app.get('/api/withdraw', async (req, res) => {
     try {
         const snapshot = await userRef.once('value');
         if (!snapshot.exists()) {
-            // Создаем юзера, если он впервые зашел
             await userRef.set({ username: user, chips: 0 });
             res.send("0");
         } else {
@@ -163,11 +168,17 @@ app.get('/api/withdraw', async (req, res) => {
     }
 });
 
-// ... и запуск сервера ...
+// --- ЗАПУСК СЕРВЕРА ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`[СЕРВЕР] Бэкенд запущен на порту ${PORT}`));
-// --- ЗАХИСТ ВІД "СНУ" RENDER ---
+
+// =======================================================
+// --- ЖОРСТКИЙ АВТО-ПІНГ (ЩОБ RENDER НІКОЛИ НЕ СПАВ) ---
+// =======================================================
 setInterval(() => {
-    console.log("[СИСТЕМА] Бот активний...");
-    // Можна додати запит до самого себе, щоб тримати порт відкритим
-}, 600000); // Кожні 10 хвилин
+    https.get('[https://casino-backend-039e.onrender.com/](https://casino-backend-039e.onrender.com/)', (res) => {
+        console.log(`[ПИНГ] Статус: ${res.statusCode} - Сервер працює і не спить!`);
+    }).on('error', (e) => {
+        console.error(`[ПИНГ ОШИБКА]: ${e.message}`);
+    });
+}, 14 * 60 * 1000); // Робимо запит до самого себе кожні 14 хвилин (Render засинає через 15)
